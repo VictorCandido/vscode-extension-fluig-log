@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Mostrando</title>
+<link rel="stylesheet" type="text/css" href="/portal/resources/style-guide/css/fluig-style-guide.min.css">
+<script src="http://vcandido.ddns.net:9000/portal/resources/js/jquery/jquery.js"></script>
+<script src="http://vcandido.ddns.net:9000/portal/resources/js/jquery/jquery-ui.min.js"></script>
+<script src="http://vcandido.ddns.net:9000/portal/resources/js/mustache/mustache-min.js"></script>
+<script src="http://vcandido.ddns.net:9000/portal/resources/style-guide/js/fluig-style-guide.min.js"></script>
+<link rel="stylesheet" type="text/css" href="http://vcandido.ddns.net:9000/log_fluig/resources/css/log_fluig.css">
+<link rel="stylesheet" type="text/css" href="http://vcandido.ddns.net:9000/portal/resources/style-guide/css/fluig-style-guide-colorpicker.min.css">
+<script src="http://vcandido.ddns.net:9000/portal/resources/style-guide/js/fluig-style-guide-colorpicker.min.js"></script>
+<!-- <script src="http://vcandido.ddns.net:9000/log_fluig/resources/js/script.js"></script> -->
+</head>
+<body class="fluig-style-guide">
+	<!-- <nav class="navbar navbar-default navbar-fixed-top" role="navigation">
+		<div class="container-fluid">
+			<div class="navbar-header">
+				<button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1">
+					<span class="sr-only"></span> <span class="icon-bar"></span> <span class="icon-bar"></span> <span class="icon-bar"></span>
+				</button>
+				<a class="navbar-brand" href="#"><span class="fluigicon fluigicon-brand fluigicon-md"></span> </a>
+			</div>
+			<div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+				<div class="navbar-form navbar-left">
+					<select id="listFiles" class="form-control"></select>
+				</div>
+				<div class="navbar-form navbar-left">
+					<button type="button" id="downloadLog" class="btn btn-primary">
+						<span class="fluigicon fluigicon-download-circle fluigicon-sm"></span> Download
+					</button>
+					<button type="button" id="highlightLog" class="btn btn-primary">
+						<span class="fluigicon fluigicon-tint fluigicon-sm"></span> Highlight
+					</button>
+				</div>
+				<div class="navbar-form navbar-right">
+					<div class="checkbox">
+						<label> 	
+							<input type="checkbox" id="autoScroll"> Rolagem autom&#225;tica
+						</label>
+					</div>
+				</div>
+			</div>
+		</div>
+	</nav> -->
+	<div class="row">
+		<div class="col-md-12">
+			<div class="log-content" style="overflow: auto !important;"></div>
+		</div>
+	</div>
+	aloooo
+</body>
+
+<script>
+    (function() {
+	var periodicalExecutor = null;
+	var lastLine = 0;
+	var file = "server.log";
+
+	$("document").ready(function() {
+		getLog();
+		listLogs();
+		reloadLog();
+
+		$("#listFiles").on("change", function() {
+			lastLine = 0;
+			file = this.value;
+			$(".log-content").html("");
+			periodicalExecutor.stop();
+			getLog();
+			reloadLog();
+		});
+
+		$("#highlightLog").on("click", function() {
+			periodicalExecutor.stop();
+			openModal();
+		});
+		$("#downloadLog").on("click", function() {
+			location.href = "http://vcandido.ddns.net:9000/log_fluig/rest/log/download/" + file;
+		});
+
+		$(window).scroll(function() {
+			if ($(window).scrollTop() + $(window).height() == $(document).height()) {
+				$("#autoScroll").prop("checked", true);
+			} else {
+				$("#autoScroll").prop("checked", false);
+			}
+		});
+
+		$("#autoScroll").on("change", function() {
+			autoScroll();
+		});
+	});
+
+	function getLog() {
+		$.get("http://vcandido.ddns.net:9000/log_fluig/rest/log/show/" + lastLine + "/" + file).success(function(data) {
+			if (data) {
+				appendLinesToLog(data);
+				if (document.title != "Mostrando " + data.logPath)
+					document.title = "Mostrando " + data.logPath;
+			}
+		}).error(function(xhr) {
+			console.log(xhr);
+		});
+
+	}
+
+	function appendLinesToLog(data) {
+		if (lastLine == 0) {
+			for (var i = 0; i < data.log.length; i++)
+				$(".log-content").append("<span class='new-line'>" + data.log[i].replace(/\\t/g, '') + "</br></span>");
+
+			$("html, body").animate({
+				scrollTop : $("body").height()
+			}, 100);
+			applyHighlight();
+		} else {
+			var totalLines = data.log.length;
+			$.each($(".log-content span"), function(i, e) {
+				if (totalLines > 0) {
+					$(e).remove();
+					totalLines--;
+				}
+			});
+			for (var i = 0; i < data.log.length; i++)
+				$(".log-content").append("<span class='new-line'>" + data.log[i].replace(/\\t/g, '') + "</br></span>");
+			applyHighlightNew();
+		}
+		lastLine = data.lastLine;
+		autoScroll();
+	}
+
+	function autoScroll() {
+		if ($("#autoScroll").is(":checked")) {
+			$("html, body").animate({
+				scrollTop : $("body").height()
+			}, 100);
+		}
+	}
+
+	function listLogs() {
+		$.get("http://vcandido.ddns.net:9000/log_fluig/rest/log/list").success(function(data) {
+			if (data) {
+				var exist = false;
+				for (var i = 0; i < data.length; i++) {
+					$("#listFiles").append("<option value='" + data[i] + "'>" + data[i] + "</option>")
+					if (data[i] == "server.log")
+						exist = true;
+				}
+			}
+
+			if (exist) {
+				$("#listFiles").val("server.log");
+			}
+		}).error(function(xhr) {
+			console.log(xhr);
+		});
+	}
+
+	function reloadLog() {
+		periodicalExecutor = setInterval(function() {
+			getLog();
+		}, 5000);
+		periodicalExecutor.start();
+	}
+
+	function openModal() {
+		var logModal = FLUIGC.modal({
+			title : 'Marcar texto no log',
+			content : $(".highlight-template").html(),
+			id : 'log-modal',
+			size : 'large',
+			actions : [ {
+				'label' : 'Fechar',
+				'autoClose' : true,
+				'classType' : 'btn btn-primary close-button'
+			} ]
+		}, function(err, data) {
+			if (!err) {
+				bindColorpicker();
+				loadColors();
+				$("#addHighlight").on("click", function() {
+					addHighlight();
+				});
+				$(".close-button").on("click", function(){
+					periodicalExecutor.start();
+				});
+			}
+		});
+	}
+
+	function bindColorpicker() {
+		var settingsFont = {
+			changeDelay : 200,
+			control : 'wheel',
+			defaultValue : '#000000',
+			inline : false,
+			letterCase : 'lowercase',
+			opacity : false,
+			position : 'bottom left'
+		}
+		var fontColorpicker = FLUIGC.colorpicker('#colorpickerFont', settingsFont);
+
+		var settingsBackground = {
+			changeDelay : 200,
+			control : 'wheel',
+			defaultValue : '#ffffff',
+			inline : false,
+			letterCase : 'lowercase',
+			opacity : true,
+			position : 'bottom left'
+		}
+		var backgroundColorpicker = FLUIGC.colorpicker('#colorpickerBackground', settingsBackground);
+	}
+
+	function addHighlight() {
+		if (FLUIGC.localStorage.getItem("highlight-log") == null) {
+			FLUIGC.localStorage.setItem("highlight-log", {
+				colorList : []
+			});
+		} else {
+			if ($("#highlightText").val() == "") {
+				FLUIGC.toast({
+					message : "Informe um texto para ser marcado",
+					type : "warning"
+				});
+			} else {
+				var colorList = FLUIGC.localStorage.getItem("highlight-log").colorList.slice();
+				colorList.push({
+					text : $("#highlightText").val(),
+					font : $("#colorpickerFont").val(),
+					background : $("#colorpickerBackground").val()
+				});
+				FLUIGC.localStorage.setItem("highlight-log", {
+					colorList : colorList
+				});
+			}
+			loadColors();
+			applyHighlight();
+		}
+	}
+
+	function loadColors() {
+		var data = FLUIGC.localStorage.getItem("highlight-log") == null ? [] : FLUIGC.localStorage.getItem("highlight-log").colorList;
+		var colorTable = FLUIGC.datatable('#highlightList', {
+			dataRequest : data,
+			renderContent : ".table-tamplate",
+			search : {
+				enabled : false
+			},
+			scroll : {
+				enabled : false
+			},
+			actions : {
+				enabled : false
+			},
+			navButtons : {
+				enabled : false
+			},
+			emptyMessage : '<div class="text-center">Nenhuma marca\u00E7\u00E3o adicionada</div>',
+			header : [ {
+				'title' : 'Marca\u00E7\u00F5es',
+				'size' : 'col-md-11'
+			}, {
+				'title' : '',
+				'size' : 'col-md-1'
+			} ]
+		}, function(err, data) {
+			$(".remove-highlight").on("click", function() {
+				setTimeout(function(){
+					var rows = colorTable.selectedRows();
+					removeHighlight(colorTable, rows[0]);
+				}, 50);
+			});
+		});
+	}
+
+	function removeHighlight(colorTable, row) {
+		var newColorList = new Array();
+		var colorList = FLUIGC.localStorage.getItem("highlight-log").colorList.slice();
+		for (var i = 0; i < colorList.length; i++) {
+			if (i == row)
+				continue;
+			newColorList.push(colorList[i]);
+		}
+		FLUIGC.localStorage.setItem("highlight-log", {
+			colorList : newColorList
+		});
+		loadColors();
+		clearHighlight();
+		applyHighlight();
+	}
+	
+	function applyHighlight(){
+		if(FLUIGC.localStorage.getItem("highlight-log") != null){
+			var colorList = FLUIGC.localStorage.getItem("highlight-log").colorList;
+			for(var i=0;i<colorList.length;i++){
+				$.each($(".log-content span"), function(index, element){
+					if($(this).html().indexOf(colorList[i].text) > -1){
+						$(this).css("color" , colorList[i].font);
+						$(this).css("background-color" , colorList[i].background);
+					}
+				});
+			}
+		}
+	}
+	
+	function applyHighlightNew(){
+		if(FLUIGC.localStorage.getItem("highlight-log") != null){
+			var colorList = FLUIGC.localStorage.getItem("highlight-log").colorList;
+			for(var i=0;i<colorList.length;i++){
+				$.each($(".log-content .new-line"), function(index, element){
+					if($(this).html().indexOf(colorList[i].text) > -1){
+						$(this).css("color" , colorList[i].font);
+						$(this).css("background-color" , colorList[i].background);
+					}
+				});
+			}
+		}
+		$(".new-line").removeClass("new-line");
+	}
+	
+	function clearHighlight(){
+		$(".log-content span").css("color", "#000000");
+		$(".log-content span").css("background-color" , "#ffffff");
+	}
+})();
+
+</script>
+</html>
+
+<script type="text/template" class="highlight-template">
+	<div style="min-height: 400px;">
+		<div class="row">
+			<div class="col-md-12">
+				<div class="form-group">
+        			<label for="highlightText">Texto</label>
+        			<input type="text" class="form-control" id="highlightText" placeholder="Insira o texto para ser marcado">
+    			</div>
+			</div>
+			<div class="col-md-1">
+				<h6><strong>Fonte:</strong></h6>
+			</div>
+			<div class="col-md-3">
+				<input class="form-control" id="colorpickerFont" type="text" />
+			</div>
+			<div class="col-md-1">
+				<h6><strong>Fundo:</strong></h6>
+			</div>
+			<div class="col-md-3">
+				<input class="form-control" id="colorpickerBackground" type="text" />
+			</div>
+			<div class="col-md-1">
+				<button type="button" id="addHighlight" class="btn btn-primary btn-sm">
+					<span class="fluigicon fluigicon-arrow-down fluigicon-xs"></span> Aplicar
+				</button>
+			</div>
+		</div>
+		<div class="row">
+			<div class="col-md-12">
+				<div id="highlightList"></div>
+			</div>
+		</div>
+	</div>
+</script>
+
+<script type="text/template" class="table-tamplate">
+	<tr>
+		<td><span style="color : {{font}}; background-color: {{background}};">{{text}}</span></td>
+		<td><span class="fluigicon fluigicon-remove-sign fluigicon-sm remove-highlight"></span></td>
+	</tr>
+</script>
